@@ -179,7 +179,7 @@ div {
 					</c:when>
 					<c:otherwise>
 					
-						<span>${loginUser.userName }님
+						<span>${principal}님
                             환영합니다 ^^</span>
                         <a href="${contextPath}/security/myPage"
                             class="text-decoration-none text-secondary">마이페이지</a>
