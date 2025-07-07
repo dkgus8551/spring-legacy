@@ -28,13 +28,16 @@ public class MemberServiceImpl implements MemberService {
 
 	@Override
 	public int insertMember(Member m) {
-
-		return memberDao.insertMember(m);
+		int result=memberDao.insertMember(m);
+		
+		// 회원 ID와 기본 USER 권한 추가
+		memberDao.insertAuthority(m);
+		
+		return result;
 	}
 
 	@Override
 	public int updateMember(Member m) {
-
 		return memberDao.updateMember(m);
 	}
 
