@@ -34,48 +34,44 @@ public class BoardServiceImpl implements BoardService {
 	}
 
 	/*
-	 * @Transactional
-	 *  - 선언적 트랜잭션 관리용 어노테이션
-	 *  - 예외가 발생하면 무조건 rollback 처리 함
-	 *  - rollbackFor를 지정하지 않으면 RuntimeException 에러가 발생한 경우만 rollback함
-	 * */
-	@Transactional(rollbackFor = {Exception.class}) // 에러 발생 시 롤백
+	 * @Transactional - 선언적 트랜잭션 관리용 어노테이션 - 예외가 발생하면 무조건 rollback 처리 함 -
+	 * rollbackFor를 지정하지 않으면 RuntimeException 에러가 발생한 경우만 rollback함
+	 */
+	@Transactional(rollbackFor = { Exception.class }) // 에러 발생 시 롤백
 	@Override
 	public int insertBoard(Board b, List<BoardImg> imgList) {
 		/*
-		 * 0. 게시글 데이터 전처리(개행문자 처리 및 xss 공격 핸들링)
-		 * 1. 게시글 테이블에 데이터를 먼저 추가
-		 * 2. 첨부 파일 테이블에 데이터 추가
-		 * 3. 첨부 파일 및 테이블 등록 실패 시 롤벡(에러 반환)
-		 * */
-		
+		 * 0. 게시글 데이터 전처리(개행문자 처리 및 xss 공격 핸들링) 1. 게시글 테이블에 데이터를 먼저 추가 2. 첨부 파일 테이블에 데이터
+		 * 추가 3. 첨부 파일 및 테이블 등록 실패 시 롤벡(에러 반환)
+		 */
+
 		// 데이터 전처리
-		//  - 게시글 내용: XSS 핸들링 및 개행문자 처리
-		//  - 게시글 제목: XSS 핸들링
-		
+		// - 게시글 내용: XSS 핸들링 및 개행문자 처리
+		// - 게시글 제목: XSS 핸들링
+
 		b.setBoardContent(Utils.XSSHandling(b.getBoardContent()));
 		b.setBoardContent(Utils.newLineHandling(b.getBoardContent()));
 		b.setBoardTitle(Utils.XSSHandling(b.getBoardTitle()));
-		
+
 		// 게시글 저장
-		//  - mybatis의 selectKey 기능을 이용하여 boardNo값을 b객체에 바인딩
+		// - mybatis의 selectKey 기능을 이용하여 boardNo값을 b객체에 바인딩
 		int result = boardDao.insertBoard(b);
-		
-		if(result == 0) {
+
+		if (result == 0) {
 			throw new RuntimeException("게시글 등록 실패");
 		}
-		
+
 		// 첨부파일 등록
-		//  - 전달받은 imgList가 비어 있지 않은 경우 진행
-		//  - 게시글 번호를 추가로 refBno 필드에 바인딩
-		if(!imgList.isEmpty()) {
-			for(BoardImg bi : imgList) {
+		// - 전달받은 imgList가 비어 있지 않은 경우 진행
+		// - 게시글 번호를 추가로 refBno 필드에 바인딩
+		if (!imgList.isEmpty()) {
+			for (BoardImg bi : imgList) {
 				bi.setRefBno(b.getBoardNo());
 			}
 			// 다중 인서트문 실행
 			int imgResult = boardDao.insertBoardImgList(imgList);
-			
-			if(imgResult != imgList.size()) {
+
+			if (imgResult != imgList.size()) {
 				throw new RuntimeException("첨부파일 등록 실패");
 			}
 		}
@@ -99,13 +95,6 @@ public class BoardServiceImpl implements BoardService {
 	}
 
 	@Override
-	public int updateBoard(Board board, String deleteList, MultipartFile upfile, List<MultipartFile> upfiles)
-			throws Exception {
-
-		return 0;
-	}
-
-	@Override
 	public List<String> selectFileList() {
 
 		return null;
@@ -120,6 +109,54 @@ public class BoardServiceImpl implements BoardService {
 	@Override
 	public Map<String, String> getBoardTypeMap() {
 		return boardDao.getBoardTypeMap();
+	}
+
+	@Transactional(rollbackFor = {Exception.class})
+	@Override
+	public int updateBoard(Board board, String deleteList, List<BoardImg> imgList) {
+		// 1. 게시글 수정
+        //       1) XSS, 개행 처리 후 추가
+		// 데이터 전처리
+		// - 게시글 내용: XSS 핸들링 및 개행문자 처리
+		// - 게시글 제목: XSS 핸들링
+		board.setBoardContent(Utils.XSSHandling(board.getBoardContent()));
+		board.setBoardContent(Utils.newLineHandling(board.getBoardContent()));
+		board.setBoardTitle(Utils.XSSHandling(board.getBoardTitle()));
+		
+		// 게시글 저장
+		// - mybatis의 selectKey 기능을 이용하여 boardNo값을 b객체에 바인딩
+		int result = boardDao.updateBoard(board);
+		
+		if (result == 0) {
+			throw new RuntimeException("게시글 수정 실패");
+		}
+        //    2. 첨부파일 수정 -> INSERT, UPDATE, DELETE
+        //       1) 새롭게 등록한 첨부파일이 없는 경우 -> 아무것도 하지 않음
+        //       2) 첨부파일이 없던 게시글에 새롭게 추가한 경우 -> INSERT
+        //       3) 첨부파일이 있던 게시글에 새롭게 추가한 경우 -> UPDATE
+        //       4) 첨부파일이 있던 게시글에 첨부파일은 삭제한 경우 -> DELETE
+        //        - 사용하지 않게 된 첨부파일에 대해서는 고려하지 않아도 상관 없음.(스케쥴러를 통해 정리예정)
+		if(deleteList != null && !deleteList.equals(deleteList)) {
+			result = boardDao.deleteBoardImg(deleteList);
+			
+			if(result == 0) {
+				throw new RuntimeException("첨부파일 삭제 실패");
+			}
+		}
+		if(!imgList.isEmpty()) {
+			for(BoardImg bi:imgList) {
+				if(bi.getBoardImgNo()==0) {
+					result = boardDao.insertBoardImg(bi);
+				} else {
+					result = boardDao.updateBoardImg(bi);
+				}
+				if(result == 0){
+					throw new RuntimeException("첨부파일 수정 실패");
+				}
+			}
+		}
+
+		return result;
 	}
 
 }

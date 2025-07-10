@@ -100,7 +100,7 @@ public class BoardDaoImpl implements BoardDao{
 
 	@Override
 	public int insertBoardImg(BoardImg bi) {
-		return 0;
+		return session.insert("board.insertBoardImg", bi);
 	}
 
 	@Override
@@ -120,22 +120,22 @@ public class BoardDaoImpl implements BoardDao{
 
 	@Override
 	public List<BoardImg> selectBoardImgList(int boardNo) {
-		return null;
+		return session.selectOne("board.selectBoardImgList", boardNo);
 	}
 
 	@Override
 	public int updateBoard(Board board) {
-		return 0;
+		return session.update("board.updateBoard", board);
 	}
 
 	@Override
 	public int deleteBoardImg(String deleteList) {
-		return 0;
+		return session.delete("board.deleteBoardImg", deleteList);
 	}
 
 	@Override
 	public int updateBoardImg(BoardImg bi) {
-		return 0;
+		return session.update("board.updateBoardImg", bi);
 	}
 
 	@Override

@@ -313,4 +313,137 @@ public class BoardController {
 		.body(resource);
 	}
 
+	// 게시판 수정 기능(Get)
+	@GetMapping("/update/{boardCode}/{boardNo}")
+	public String updateBoard(
+			@PathVariable("boardCode") String boardCode,
+			@PathVariable("boardNo") int boardNo,
+			Authentication authentication,
+			Model model
+			) {
+		// 업무 로직
+		// 1. 현재 게시글을 수정할 수 있는 사용자인지 체크(인가 확인)
+		//	- 게시글의 작성자 == 로그인한 사용자
+		//	- 관리자 권한
+		BoardExt board = boardService.selectBoard(boardNo);
+		if(board == null) {
+			throw new RuntimeException("게시글이 존재하지 않습니다.");
+		}
+		
+//		int boardWriter = Integer.parseInt(board.getBoardWriter());
+//		int userNo = ((Member) authentication.getPrincipal()).getUserNo();
+//		if(!(boardWriter == userNo || (authentication.getAuthorities().stream()
+//				.anyMatch(authority->authority.getAuthority().equals("ROLE_ADMIN"))))) {
+//			throw new RuntimeException("게시글 수정 권한이 없습니다.");
+//		}
+		
+		
+		// 2. 게시글 정보 조회
+		//	- newlineClear 메소드를 통해 개행문자 원상복구
+		board.setBoardContent(Utils.newLineClear(board.getBoardContent()));
+		// <br> -> \n
+		
+		// 3. model 영역에 추가 후 forward
+		model.addAttribute("board",board);
+		return "board/boardUpdateForm";
+	}
+	
+	@PostMapping("update/{boardCode}/{boardNo}")
+	public String updateBoard2(
+            @ModelAttribute Board board,
+            @PathVariable("boardCode") String boardCode,
+            @PathVariable("boardNo") int boardNo,
+            Authentication authentication,
+            RedirectAttributes ra,
+            Model model,
+            @RequestParam(value = "upfile", required = false) List<MultipartFile> upfiles,
+            String deleteList ,
+            @RequestParam(value = "imgNo", required = false) List<Integer> imgNoList
+    ) {
+		// 다음 업무로직의 순서에 맞춰 코드를 작성
+        // 0. 유효성검사(생략)
+        // 1. 현재 게시글을 수정할 수 있는 사용자인지 체크.
+		BoardExt boardExt = boardService.selectBoard(boardNo);
+		
+		int boardWriter = Integer.parseInt(boardExt.getBoardWriter());
+		int userNo = ((Member) authentication.getPrincipal()).getUserNo();
+		if(!(boardWriter == userNo || (authentication.getAuthorities().stream()
+				.anyMatch(authority->authority.getAuthority().equals("ROLE_ADMIN"))))) {
+			throw new RuntimeException("게시글 수정 권한이 없습니다.");
+		}
+		
+        // 2. 새롭게 등록한 첨부파일이 있는지 체크 후 저장
+		List<BoardImg> imgList = new ArrayList<>();
+		
+//		for(int i = 0, j = 0;i<imgNoList.size();i++) {
+//			
+//			if(!(j < upfiles.size())) { // upfiles로 꺼낼 값이 없는 경우
+//				break;
+//			}
+//			
+//			MultipartFile upfile = upfiles.get(j++);
+//			if(upfile.isEmpty()) {
+//				continue;
+//			}
+//			String changeName = Utils.saveFile(upfile, application, boardCode);
+//			BoardImg bi = new BoardImg();
+//			bi.setBoardImgNo(imgNoList.get(i)); // 현재 레벨에 맞는 imgNo
+//			bi.setChangeName(changeName);
+//			bi.setOriginName(upfile.getOriginalFilename());
+//			bi.setImgLevel(i);
+//			bi.setRefBno(boardNo); // 게시글 번호 추가
+//			imgList.add(bi);
+//		}
+		
+		
+		int level = 0; // 첨부파일의 레벨
+		// 0: 썸네일, 0이 아닌 값: 기타 파일들
+		if(upfiles != null) {
+			for (MultipartFile upfile : upfiles) {
+				if (upfile.isEmpty()) {
+					continue;
+				}
+				// 첨부 파일이 존재한다면 web 서버 상에 첨부 파일 저장
+				// 첨부 파일 관리를 위해 DB에 첨부 파일의 위치 정보를 저장
+				String changeName = Utils.saveFile(upfile, application, boardCode);
+				BoardImg bi = new BoardImg();
+				bi.setBoardImgNo(imgNoList.get(level));
+				bi.setChangeName(changeName);
+				bi.setOriginName(upfile.getOriginalFilename());
+				bi.setImgLevel(level++);
+				bi.setRefBno(boardNo); // 게시글 번호 추가
+				imgList.add(bi);
+			}
+			
+			board.setBoardNo(boardNo);
+			board.setBoardCd(boardCode);
+			
+			log.debug("board: {}", board);
+			log.debug("imgList: {}", imgList);
+			log.debug("deleteList: {}", deleteList);
+		}
+		
+		
+        // 3. 게시글 , 첨부파일 수정 서비스 요청
+        //    1) UPDATE에 필요한 데이터를 추가로 바인딩
+        //    서비스 내부 로직
+        //    1. 게시글 수정
+        //       1) XSS, 개행 처리 후 추가
+        //    2. 첨부파일 수정 -> INSERT, UPDATE, DELETE
+        //       1) 새롭게 등록한 첨부파일이 없는 경우 -> 아무것도 하지 않음
+        //       2) 첨부파일이 없던 게시글에 새롭게 추가한 경우 -> INSERT
+        //       3) 첨부파일이 있던 게시글에 새롭게 추가한 경우 -> UPDATE
+        //       4) 첨부파일이 있던 게시글에 첨부파일은 삭제한 경우 -> DELETE
+        //        - 사용하지 않게 된 첨부파일에 대해서는 고려하지 않아도 상관 없음.(스케쥴러를 통해 정리예정)
+		int result = boardService.updateBoard(board, deleteList, imgList);
+        
+		if(result == 0) {
+			throw new RuntimeException("게시글 수정 실패");
+		}
+
+		ra.addFlashAttribute("alertMsg", "게시글 수정 성공");
+		return "redirect:/board/detail/" + boardCode+"/"+boardNo;
+	}
+	
+	
 }

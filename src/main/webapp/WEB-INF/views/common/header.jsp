@@ -202,7 +202,7 @@ div {
 		<div id="header_2">
 			<ul>
 				<!-- 권한별 노출 url 설정 -->
-				<sec:authorize access="hasRole('ROLE_USER')">
+				<sec:authorize access="hasAnyRole('ROLE_USER','ROLE_ADMIN')">
 				<li><a href="${contextPath }">HOME</a></li>
 				<li><a href="${contextPath }/chat/chatRoomList">채팅</a></li>
 				
