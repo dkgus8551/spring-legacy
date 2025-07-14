@@ -16,6 +16,8 @@ public interface ChatService {
 
 	int insertMessage(ChatMessage chatMessage);
 
-	void exitChatRoom(ChatRoomJoin join);
+	void exitChatRoom(ChatMessage message);
+	
+	
 
 }
